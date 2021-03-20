@@ -21,14 +21,14 @@
 #include <mutex>
 #include <vector>
 
-#include <librealsense/rs.hpp>
+#include <librealsense2/rs.hpp>
 
 #include "sensors/Sensors.hh"
 
-class RealSenseCamera: public DepthCamera
+class RealSense2Camera: public DepthCamera
 {
 public:
-    RealSenseCamera(size_t width, size_t height, unsigned int fps);
+    RealSense2Camera();
 
     std::vector<uint16_t> &get_depth_buffer() override;
 
@@ -36,6 +36,5 @@ private:
     std::mutex depth_buffer_mtx;
     std::vector<uint16_t> depth_buffer;
 
-    std::shared_ptr<rs::context> ctx;
-    rs::device *dev = nullptr;
+    rs2::pipeline pipeline;
 };

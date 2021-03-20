@@ -26,7 +26,7 @@
 int main(int argc, char **argv)
 {
     std::shared_ptr<DepthCamera> depth_camera =
-        std::make_shared<RealSenseCamera>(640, 480, 30);
+        std::make_shared<RealSense2Camera>();
 
     std::shared_ptr<DepthImagePolarHistDetector> obstacle_detector =
         std::make_shared<DepthImagePolarHistDetector>(STEP, 1.5, 0.2);

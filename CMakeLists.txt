@@ -70,7 +70,7 @@ endif()
 #List required packages for each build option
 set(DEPS "GLM")
 option_deps(DEPS WITH_GAZEBO "gazebo")
-option_deps(DEPS WITH_REALSENSE "realsense")
+option_deps(DEPS WITH_REALSENSE "realsense2")
 option_deps(DEPS WITH_VDEBUG "gazebo" "OpenGL" "GLUT")
 list(REMOVE_DUPLICATES DEPS)
 
@@ -128,20 +128,21 @@ endif()
 list(APPEND PUBLIC_HEADERS ${CMAKE_CURRENT_BINARY_DIR}/include/coav.hh)
 
 # Add subdirectories
-add_subdirectory(modules/mavlink_vehicles)
-add_subdirectory(src/avoidance)
+#add_subdirectory(modules/mavlink_vehicles)
+#add_subdirectory(src/avoidance)
 add_subdirectory(src/common)
 add_subdirectory(src/detection)
 add_subdirectory(src/sensors)
-add_subdirectory(src/vehicles)
+#add_subdirectory(src/vehicles)
 
 # Add library
 add_library(coav SHARED
-    $<TARGET_OBJECTS:avoidance>
+#    $<TARGET_OBJECTS:avoidance>
     $<TARGET_OBJECTS:common>
     $<TARGET_OBJECTS:detection>
     $<TARGET_OBJECTS:sensors>
-    $<TARGET_OBJECTS:vehicles>)
+#    $<TARGET_OBJECTS:vehicles>
+)
 
 set_target_properties(coav PROPERTIES
     VERSION ${PROJECT_VERSION}
@@ -149,7 +150,8 @@ set_target_properties(coav PROPERTIES
 
 target_link_libraries(coav
     PUBLIC ${LIBRARIES}
-    PRIVATE mavlink_vehicles)
+#    PRIVATE mavlink_vehicles
+)
 
 install(TARGETS coav DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
