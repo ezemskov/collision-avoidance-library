@@ -9,11 +9,14 @@
 void LogObstacle(const Obstacle& o)
 {
     std::cout << std::fixed << 
-        "\tid " << std::setw(5) << o.id << 
+        "\tid " << std::setw(5) << 
+o.id << 
         std::setprecision(3) << 
         " [R " << o.center.x << " m" << std::setprecision(0) << 
-        " | v " << std::setw(3) << glm::degrees(o.center.y) << "°" <<
-        " | h " << std::setw(3) << glm::degrees(o.center.z) << "°" <<
+        " | h " << std::setw(3) << glm::degrees(o.center.z) << "° " << 
+        " | v " << std::setw(3) << glm::degrees(o.center.y) << "° " << 
+        " | x " << std::setw(4) << o.center_cartesian.x << " px " <<
+        " | y " << std::setw(3) << o.center_cartesian.y << " px " <<
         "]" << std::endl;
 }
 

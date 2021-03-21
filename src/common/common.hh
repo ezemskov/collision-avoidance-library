@@ -36,6 +36,7 @@ struct Obstacle {
      * "looking" along the 'y' axis.
      */
     glm::dvec3 center;
+    glm::dvec3 center_cartesian;
 };
 
 struct Pose {
