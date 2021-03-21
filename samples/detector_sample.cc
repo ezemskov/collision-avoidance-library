@@ -112,7 +112,7 @@ int main(int argc, char **argv)
 {
     // Initialize Depth Camera
     shared_ptr<DepthCamera> depth_camera =
-        make_shared<RealSenseCamera>(640, 480, 30);
+        make_shared<RealSense2Camera>();
 
     // Initialize Detector
     shared_ptr<DepthImageSimpleDetector> obstacle_detector =
