@@ -28,12 +28,6 @@ catch(const rs2::error &e)
 
 std::vector<uint16_t> &RealSense2Camera::get_depth_buffer() try
 {
-    //todo : check if started
-    if (false) {
-        std::cerr << "[RealSense2Camera] Error: No device available." << std::endl;
-        return this->depth_buffer;
-    }
-
     rs2::frameset frames = this->pipeline.wait_for_frames();
     rs2::depth_frame frame = frames.get_depth_frame();
 

@@ -22,7 +22,9 @@ o.id <<
 
 int main(int argc, char **argv)
 {
-    std::shared_ptr<DepthCamera> depth_camera = std::make_shared<RealSense2Camera>();
+    rs2::pipeline pipeline;
+    pipeline.start();
+    auto depth_camera = std::make_shared<RealSense2CamProxy>();
 
     static const double PolarHistStep = glm::radians(5.0); //i.e. 5 degrees in radians
     auto detectorObstacle = std::make_shared<DepthImageObstacleDetector>();
@@ -30,6 +32,9 @@ int main(int argc, char **argv)
 
     while (true) 
     {
+        rs2::frameset frames = pipeline.wait_for_frames();
+        rs2::depth_frame frame = frames.get_depth_frame();
+        depth_camera->set_depth_frame(&frame);
         const auto depthData = depth_camera->read();
 
         std::cout << "DepthImageObstacleDetector " << std::endl;

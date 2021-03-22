@@ -9,8 +9,9 @@ if (${WITH_GAZEBO})
 endif()
 
 if (${WITH_REALSENSE})
-    set(SOURCES ${SOURCES} RealSense2Camera.cc)
-    set(HEADERS ${HEADERS} RealSense2Camera.hh)
+    set(SOURCES ${SOURCES} RealSense2Camera.cc RealSense2CamProxy.cc)
+    set(HEADERS ${HEADERS} RealSense2Camera.hh RealSense2CamProxy.hh)
+    
 endif()
 
 export_headers("${HEADERS}" "sensors")
