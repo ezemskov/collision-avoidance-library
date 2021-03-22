@@ -4,6 +4,9 @@
 #include <iostream>
 #include <iomanip>
 #include <algorithm>
+#include <sstream>
+#include <chrono>
+#include <ctime>
 
 #include <coav/coav.hh>
 
@@ -42,6 +45,15 @@ std::pair<uint16_t, uint16_t> GetRawDepthBounds(const std::vector<uint16_t>& raw
     return std::pair<uint16_t, uint16_t>(*minDepthRaw, *maxDepthRaw);
 }
 
+std::string Timestamp()
+{
+    const auto now = std::chrono::system_clock::now();
+    const auto in_time_t = std::chrono::system_clock::to_time_t(now);
+    std::stringstream ss;
+    ss << std::put_time(std::localtime(&in_time_t), "%X");
+    return ss.str();
+}
+
 int main(int argc, char **argv)
 {
     rs2::pipeline pipeline;
@@ -60,7 +72,7 @@ int main(int argc, char **argv)
         const auto depthBounds = GetRawDepthBounds(GetRawDepths(frame));
         const float minDepth = depthBounds.first * frame.get_units(); 
         const float maxDepth = depthBounds.second * frame.get_units(); 
-        std::cout << std::setprecision(3) << "R bounds [" << minDepth << "~" << maxDepth << "] m" << std::endl;
+        std::cout << Timestamp() << std::setprecision(3) << "R bounds [" << minDepth << "~" << maxDepth << "] m" << std::endl;
 
         depth_camera->set_depth_frame(&frame);
         const auto depthData = depth_camera->read();
