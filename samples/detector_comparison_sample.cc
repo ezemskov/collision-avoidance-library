@@ -8,6 +8,9 @@
 #include <chrono>  // chrono::system_clock
 #include <ctime>   // localtime
 
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
+
 #include <coav/coav.hh>
 
 void LogObstacle(const Obstacle& o)
@@ -45,14 +48,28 @@ std::pair<uint16_t, uint16_t> GetRawDepthBounds(const std::vector<uint16_t>& raw
     return std::pair<uint16_t, uint16_t>(*minDepthRaw, *maxDepthRaw);
 }
 
-std::string Timestamp()
+std::string Timestamp(const std::string& format)
 {
     const auto now = std::chrono::system_clock::now();
     const auto in_time_t = std::chrono::system_clock::to_time_t(now);
     std::stringstream ss;
-    ss << std::put_time(std::localtime(&in_time_t), "%X");
+    ss << std::put_time(std::localtime(&in_time_t), format.c_str());
     return ss.str();
 }
+
+void SaveFrame(const rs2::video_frame& frame_)
+{
+    const bool isDepth = frame_.is<rs2::depth_frame>();
+    //rs2::colorizer colorizer;
+    const rs2::video_frame frame = isDepth ? rs2::colorizer().colorize(frame_) : frame_; 
+
+    // Write images to disk
+    std::stringstream filename;
+    filename << "image_" << Timestamp("%H%M%S") <<  frame.get_profile().stream_name() << ".png";
+    stbi_write_png(filename.str().c_str(), frame.get_width(), frame.get_height(),
+                   frame.get_bytes_per_pixel(), frame.get_data(), frame.get_stride_in_bytes());
+}
+
 
 int main(int argc, char **argv)
 {
@@ -69,14 +86,17 @@ int main(int argc, char **argv)
     while (std::cin.get() != 'q') 
     {
         rs2::frameset frames = pipeline.wait_for_frames();
-        rs2::depth_frame frame = frames.get_depth_frame();
+        rs2::depth_frame depthFrame = frames.get_depth_frame();
 
-        const auto depthBounds = GetRawDepthBounds(GetRawDepths(frame));
-        const float minDepth = depthBounds.first * frame.get_units(); 
-        const float maxDepth = depthBounds.second * frame.get_units(); 
-        std::cout << Timestamp() << std::setprecision(3) << "R bounds [" << minDepth << "~" << maxDepth << "] m" << std::endl;
+        SaveFrame(depthFrame);
+        SaveFrame(frames.get_color_frame());
 
-        depth_camera->set_depth_frame(&frame);
+        const auto depthBounds = GetRawDepthBounds(GetRawDepths(depthFrame));
+        const float minDepth = depthBounds.first * depthFrame.get_units(); 
+        const float maxDepth = depthBounds.second * depthFrame.get_units(); 
+        std::cout << Timestamp("%T") << std::setprecision(3) << " R bounds [" << minDepth << "~" << maxDepth << "] m" << std::endl;
+
+        depth_camera->set_depth_frame(&depthFrame);
         const auto depthData = depth_camera->read();
 
         std::cout << "DepthImageObstacleDetector " << std::endl;
