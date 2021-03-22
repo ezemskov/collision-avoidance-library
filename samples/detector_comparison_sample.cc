@@ -5,8 +5,8 @@
 #include <iomanip>
 #include <algorithm>
 #include <sstream>
-#include <chrono>
-#include <ctime>
+#include <chrono>  // chrono::system_clock
+#include <ctime>   // localtime
 
 #include <coav/coav.hh>
 
@@ -64,7 +64,9 @@ int main(int argc, char **argv)
     auto detectorObstacle = std::make_shared<DepthImageObstacleDetector>();
     auto detectorPolarHist = std::make_shared<DepthImagePolarHistDetector>(PolarHistStep);
 
-    while (true) 
+    std::cout << "Press q to exit, Enter to capture next frame" << std::endl;
+
+    while (std::cin.get() != 'q') 
     {
         rs2::frameset frames = pipeline.wait_for_frames();
         rs2::depth_frame frame = frames.get_depth_frame();
