@@ -65,11 +65,10 @@ void SaveFrame(const rs2::video_frame& frame_)
 
     // Write images to disk
     std::stringstream filename;
-    filename << "image_" << Timestamp("%H%M%S") <<  frame.get_profile().stream_name() << ".png";
+    filename << "image_" << Timestamp("%F_%H%M%S") << "_" << frame.get_profile().stream_name() << ".png";
     stbi_write_png(filename.str().c_str(), frame.get_width(), frame.get_height(),
                    frame.get_bytes_per_pixel(), frame.get_data(), frame.get_stride_in_bytes());
 }
-
 
 int main(int argc, char **argv)
 {
@@ -77,9 +76,7 @@ int main(int argc, char **argv)
     pipeline.start();
     auto depth_camera = std::make_shared<RealSense2CamProxy>();
 
-    static const double PolarHistStep = glm::radians(5.0); //i.e. 5 degrees in radians
     auto detectorObstacle = std::make_shared<DepthImageObstacleDetector>();
-    auto detectorPolarHist = std::make_shared<DepthImagePolarHistDetector>(PolarHistStep);
 
     std::cout << "Press q to exit, Enter to capture next frame" << std::endl;
 
@@ -88,25 +85,19 @@ int main(int argc, char **argv)
         rs2::frameset frames = pipeline.wait_for_frames();
         rs2::depth_frame depthFrame = frames.get_depth_frame();
 
-        SaveFrame(depthFrame);
-        SaveFrame(frames.get_color_frame());
-
         const auto depthBounds = GetRawDepthBounds(GetRawDepths(depthFrame));
         const float minDepth = depthBounds.first * depthFrame.get_units(); 
         const float maxDepth = depthBounds.second * depthFrame.get_units(); 
-        std::cout << Timestamp("%T") << std::setprecision(3) << " R bounds [" << minDepth << "~" << maxDepth << "] m" << std::endl;
+        std::cout << Timestamp("%F_%H%M%S") << std::setprecision(3) << " R bounds [" << minDepth << "~" << maxDepth << "] m" << std::endl;
+
+        SaveFrame(depthFrame);
+        SaveFrame(frames.get_color_frame());
 
         depth_camera->set_depth_frame(&depthFrame);
         const auto depthData = depth_camera->read();
 
         std::cout << "DepthImageObstacleDetector " << std::endl;
         for (const Obstacle& o: detectorObstacle->detect(depthData))
-        {
-            LogObstacle(o);       
-        }
-
-        std::cout << "DepthImagePolarHistDetector " << std::endl;
-        for (const Obstacle& o: detectorPolarHist->detect(depthData))
         {
             LogObstacle(o);       
         }
