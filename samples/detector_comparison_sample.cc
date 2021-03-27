@@ -13,6 +13,15 @@
 
 #include <coav/coav.hh>
 
+namespace 
+{
+    static const uint16_t DepthMin = 330;   //0.33 m
+    static const uint16_t DepthMax = 15000; //15 m
+
+    using MinMaxPairI = std::pair<uint16_t, uint16_t>;
+    using MinMaxPairF = std::pair<float, float> ;
+}
+
 void LogObstacle(const Obstacle& o)
 {
     std::cout << std::fixed << 
@@ -45,8 +54,29 @@ std::pair<uint16_t, uint16_t> GetRawDepthBounds(const std::vector<uint16_t>& raw
     auto itEndNonzero = std::remove(rawDepthVec.begin(), rawDepthVec.end(), 0);
     rawDepthVec.erase(itEndNonzero, rawDepthVec.end());
 
-    const auto [minDepthRaw, maxDepthRaw] = std::minmax_element(rawDepthVec.begin(), rawDepthVec.end());
-    return std::pair<uint16_t, uint16_t>(*minDepthRaw, *maxDepthRaw);
+    const auto [minDepth, maxDepth] = std::minmax_element(rawDepthVec.begin(), rawDepthVec.end());
+    return std::pair<uint16_t, uint16_t>(*minDepth, *maxDepth);
+}
+
+MinMaxPairI GetRawDepthBounds(const std::vector<uint16_t>& rawDepthVec, const MinMaxPairI& filter)
+{
+    std::vector<uint16_t> rawDepthVec_ = rawDepthVec;
+    auto itEndFiltered = std::remove_if(rawDepthVec_.begin(), rawDepthVec_.end(), [&filter](uint16_t val){
+        return (val <= filter.first) || (val > filter.second);
+    });
+    rawDepthVec_.erase(itEndFiltered, rawDepthVec_.end());
+
+    const auto [itMinDepth, itMaxDepth] = std::minmax_element(rawDepthVec_.begin(), rawDepthVec_.end());
+    return MinMaxPairI(*itMinDepth, *itMaxDepth);
+}
+
+MinMaxPairF GetDepthBounds(const rs2::depth_frame& frame, const MinMaxPairI& filter)
+{
+    const auto rawBounds = GetRawDepthBounds(GetRawBuffer<uint16_t>(frame), filter);
+    return MinMaxPairF(
+        rawBounds.first  * frame.get_units(),
+        rawBounds.second * frame.get_units()
+    );
 }
 
 std::string Timestamp(const std::string& format)
@@ -92,10 +122,12 @@ int main(int argc, char **argv)
         rs2::video_frame colorFrame = frames.get_color_frame();
         const rs2::video_frame depthFrameColorized = rs2::colorizer().colorize(depthFrame); 
 
-        const auto depthBounds = GetRawDepthBounds(GetRawBuffer<uint16_t>(depthFrame));
-        const float minDepth = depthBounds.first * depthFrame.get_units(); 
-        const float maxDepth = depthBounds.second * depthFrame.get_units(); 
-        std::cout << Timestamp("%F_%H%M%S") << std::setprecision(3) << " R bounds [" << minDepth << "~" << maxDepth << "] m" << std::endl;
+        const auto depthBounds = GetDepthBounds(depthFrame, MinMaxPairI(0, INT_MAX));
+        const auto depthBoundsFilt = GetDepthBounds(depthFrame, MinMaxPairI(DepthMin, DepthMax));
+        std::cout << Timestamp("%F_%H%M%S") << std::setprecision(3) << 
+            " R ["        << depthBounds.first << "~" << depthBounds.second << "] m" << 
+            " filtered [" << depthBoundsFilt.first << "~" << depthBoundsFilt.second << "] m" << 
+            std::endl;
 
         depth_camera->set_depth_frame(&depthFrame);
         const auto depthData = depth_camera->read();
