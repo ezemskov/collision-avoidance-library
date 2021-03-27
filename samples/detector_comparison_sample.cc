@@ -31,7 +31,7 @@ o.id <<
         " [R " << o.center.x << " m" << std::setprecision(0) << 
         " | h " << std::setw(3) << glm::degrees(o.center.z) << "° " << 
         " | v " << std::setw(3) << glm::degrees(o.center.y) << "° " << 
-        " | x " << std::setw(4) << o.center_cartesian.x << " px " <<
+        " | x " << std::setw(4) << o.center_cartesian.z << " px " <<
         " | y " << std::setw(3) << o.center_cartesian.y << " px " <<
         "]" << std::endl;
 }
@@ -88,7 +88,7 @@ std::string Timestamp(const std::string& format)
     return ss.str();
 }
 
-void SaveFrame(const rs2::video_frame& frame, const uint8_t* rawBuffer = nullptr)
+void SaveFrame(const rs2::video_frame& frame, const uint8_t* rawBuffer, const std::string& filename)
 {
     if (rawBuffer == nullptr)
     {
@@ -96,14 +96,24 @@ void SaveFrame(const rs2::video_frame& frame, const uint8_t* rawBuffer = nullptr
     }
 
     // Write images to disk
-    std::stringstream filename;
-    filename << "image_" << Timestamp("%F_%H%M%S") << "_" << frame.get_profile().stream_name() << ".png";
-    stbi_write_png(filename.str().c_str(), frame.get_width(), frame.get_height(),
+    stbi_write_png(filename.c_str(), frame.get_width(), frame.get_height(),
                    frame.get_bytes_per_pixel(), rawBuffer, frame.get_stride_in_bytes());
 }
 
 void DrawObstacles(std::vector<uint8_t>& imageBuf, const std::vector<Obstacle>& obstacles)
 {
+    //todo : get from rs2::video_frame
+    static const size_t Width = 848;
+    static const size_t Height = 480;
+    static const size_t BPP = 3;
+
+    for (const Obstacle& o: obstacles)
+    {
+        const size_t idx = (o.center_cartesian.z + (o.center_cartesian.y * Width)) * BPP;
+        imageBuf[idx] = 0xFF;
+        imageBuf[idx+1] = 0xFF;
+        imageBuf[idx+2] = 0xFF;
+    }
 }
 
 int main(int argc, char **argv)
@@ -139,10 +149,12 @@ int main(int argc, char **argv)
             LogObstacle(o);       
         }
 
-        std::vector<uint8_t> colorFrameBuf = GetRawBuffer<uint8_t>(colorFrame);
-        DrawObstacles(colorFrameBuf, obstacles);
+        std::vector<uint8_t> depthFrameBuf = GetRawBuffer<uint8_t>(depthFrameColorized);
+        DrawObstacles(depthFrameBuf, obstacles);
 
-        SaveFrame(depthFrameColorized);
-        SaveFrame(colorFrame, colorFrameBuf.data());
+        const std::string filenamePrefix  = "image_" + Timestamp("%F_%H%M%S") + "_"; 
+        SaveFrame(depthFrameColorized, depthFrameBuf.data(), filenamePrefix + "depth_.png");
+        SaveFrame(depthFrameColorized, nullptr,              filenamePrefix + "depth.png");
+        SaveFrame(colorFrame,          nullptr,              filenamePrefix + "color.png");
     }
 }
