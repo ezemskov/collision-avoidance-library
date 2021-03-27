@@ -16,7 +16,7 @@ class RealSense2CamProxy: public DepthCamera
 public:
     RealSense2CamProxy();
 
-    void set_depth_frame(rs2::depth_frame* frame_) { frame = frame_; } 
+    void set_depth_frame(rs2::depth_frame* frame_); 
     std::vector<uint16_t> &get_depth_buffer() override;
 
 private:

@@ -27,13 +27,14 @@ o.id <<
         "]" << std::endl;
 }
 
-std::vector<uint16_t> GetRawDepths(const rs2::depth_frame& df)
+template<typename T>
+std::vector<T> GetRawBuffer(const rs2::video_frame& df)
 {
-   const size_t pointQnty = df.get_data_size() / sizeof(uint16_t);
-   const uint16_t* first(reinterpret_cast<const uint16_t*>(df.get_data()));
-   const uint16_t* last = first + pointQnty;
+   const size_t resSize = df.get_data_size() / sizeof(T);
+   const T* first(reinterpret_cast<const T*>(df.get_data()));
+   const T* last = first + resSize;
 
-   std::vector<uint16_t> res(pointQnty, 0);
+   std::vector<T> res(resSize, 0);
    std::copy(first, last, res.begin());
    return res;
 }
@@ -57,17 +58,22 @@ std::string Timestamp(const std::string& format)
     return ss.str();
 }
 
-void SaveFrame(const rs2::video_frame& frame_)
+void SaveFrame(const rs2::video_frame& frame, const uint8_t* rawBuffer = nullptr)
 {
-    const bool isDepth = frame_.is<rs2::depth_frame>();
-    //rs2::colorizer colorizer;
-    const rs2::video_frame frame = isDepth ? rs2::colorizer().colorize(frame_) : frame_; 
+    if (rawBuffer == nullptr)
+    {
+        rawBuffer = static_cast<const uint8_t*>(frame.get_data());
+    }
 
     // Write images to disk
     std::stringstream filename;
     filename << "image_" << Timestamp("%F_%H%M%S") << "_" << frame.get_profile().stream_name() << ".png";
     stbi_write_png(filename.str().c_str(), frame.get_width(), frame.get_height(),
-                   frame.get_bytes_per_pixel(), frame.get_data(), frame.get_stride_in_bytes());
+                   frame.get_bytes_per_pixel(), rawBuffer, frame.get_stride_in_bytes());
+}
+
+void DrawObstacles(std::vector<uint8_t>& imageBuf, const std::vector<Obstacle>& obstacles)
+{
 }
 
 int main(int argc, char **argv)
@@ -75,7 +81,6 @@ int main(int argc, char **argv)
     rs2::pipeline pipeline;
     pipeline.start();
     auto depth_camera = std::make_shared<RealSense2CamProxy>();
-
     auto detectorObstacle = std::make_shared<DepthImageObstacleDetector>();
 
     std::cout << "Press q to exit, Enter to capture next frame" << std::endl;
@@ -84,22 +89,28 @@ int main(int argc, char **argv)
     {
         rs2::frameset frames = pipeline.wait_for_frames();
         rs2::depth_frame depthFrame = frames.get_depth_frame();
+        rs2::video_frame colorFrame = frames.get_color_frame();
+        const rs2::video_frame depthFrameColorized = rs2::colorizer().colorize(depthFrame); 
 
-        const auto depthBounds = GetRawDepthBounds(GetRawDepths(depthFrame));
+        const auto depthBounds = GetRawDepthBounds(GetRawBuffer<uint16_t>(depthFrame));
         const float minDepth = depthBounds.first * depthFrame.get_units(); 
         const float maxDepth = depthBounds.second * depthFrame.get_units(); 
         std::cout << Timestamp("%F_%H%M%S") << std::setprecision(3) << " R bounds [" << minDepth << "~" << maxDepth << "] m" << std::endl;
 
-        SaveFrame(depthFrame);
-        SaveFrame(frames.get_color_frame());
-
         depth_camera->set_depth_frame(&depthFrame);
         const auto depthData = depth_camera->read();
+        const std::vector<Obstacle> obstacles = detectorObstacle->detect(depthData); 
 
         std::cout << "DepthImageObstacleDetector " << std::endl;
-        for (const Obstacle& o: detectorObstacle->detect(depthData))
+        for (const Obstacle& o: obstacles)
         {
             LogObstacle(o);       
         }
+
+        std::vector<uint8_t> colorFrameBuf = GetRawBuffer<uint8_t>(colorFrame);
+        DrawObstacles(colorFrameBuf, obstacles);
+
+        SaveFrame(depthFrameColorized);
+        SaveFrame(colorFrame, colorFrameBuf.data());
     }
 }

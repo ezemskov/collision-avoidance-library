@@ -16,7 +16,7 @@ RealSense2CamProxy::RealSense2CamProxy() try
     //todo
     hfov = glm::radians(87.0);
     vfov = glm::radians(58.0);
-    scale = std::numeric_limits<double>::quiet_NaN();  //will be set in first get_depth_buffer()
+    scale = std::numeric_limits<double>::quiet_NaN();  //will be set in first set_depth_frame()
 
     depth_buffer.resize(width * height);
 }
@@ -26,14 +26,21 @@ catch(const rs2::error &e)
         << e.get_failed_args().c_str() << std::endl;
 }
 
+void RealSense2CamProxy::set_depth_frame(rs2::depth_frame* frame_)
+{ 
+    frame = frame_; 
+    if (frame != nullptr)
+    {
+        scale = frame->get_units();
+    }
+} 
+
 std::vector<uint16_t> &RealSense2CamProxy::get_depth_buffer() try
 {
     if (frame == nullptr)
     {
         return depth_buffer;
     }
-
-    scale = frame->get_units();
 
     const uint16_t *frameData = reinterpret_cast<const uint16_t *>(frame->get_data());
 
