@@ -141,10 +141,13 @@ void DrawObstacles(std::vector<uint8_t>& imageBuf, const std::vector<Obstacle>& 
 
     for (const Obstacle& o: obstacles)
     {
-        const size_t idx = (o.center_cartesian.z + (o.center_cartesian.y * Width)) * BPP;
-        imageBuf[idx] = 0xFF;
-        imageBuf[idx+1] = 0xFF;
-        imageBuf[idx+2] = 0xFF;
+        for (const glm::dvec3& point : o.points)
+        {
+            const size_t idx = (point.z + (point.y * Width)) * BPP;
+            imageBuf[idx] = 0xFF;
+            imageBuf[idx+1] = 0xFF;
+            imageBuf[idx+2] = 0xFF;
+        }
     }
 }
 
@@ -187,7 +190,7 @@ int main(int argc, char **argv)
         DrawObstacles(depthFrameBuf, obstacles);
 
         const std::string filenamePrefix  = "image_" + Timestamp("%F_%H%M%S") + "_"; 
-        SaveFrame(depthFrameColorized, depthFrameBuf.data(), filenamePrefix + "depth_.png");
+        SaveFrame(depthFrameColorized, depthFrameBuf.data(), filenamePrefix + "depth_obstacles.png");
         SaveFrame(depthFrameColorized, nullptr,              filenamePrefix + "depth.png");
         SaveFrame(colorFrame,          nullptr,              filenamePrefix + "color.png");
     }
