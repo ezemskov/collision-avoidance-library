@@ -4,6 +4,7 @@
 #include <iostream>
 #include <iomanip>
 #include <algorithm>
+#include <fstream>
 #include <sstream>
 #include <chrono>  // chrono::system_clock
 #include <ctime>   // localtime
@@ -40,7 +41,7 @@ MinMaxPairD Bounds(const Obstacle& o, GetDimFuncT getDim)
     return MinMaxPairD(getDim(*itMin), getDim(*itMax));
 }
 
-void LogObstacle(const Obstacle& o)
+void LogObstacle(const Obstacle& o, std::ostream& os)
 {
     const auto rBounds = Bounds(o, [](const glm::dvec3& point){ return point.x * DepthScale; });
     const auto xBounds = Bounds(o, [](const glm::dvec3& point){ return point.z; });
@@ -48,7 +49,7 @@ void LogObstacle(const Obstacle& o)
 
     const auto delta = [](const MinMaxPairD& bounds) { return bounds.second - bounds.first; };
 
-    std::cout << std::fixed << 
+    os << std::fixed << 
         "\tid " << std::setw(5) << o.id << std::setprecision(3) << 
         " R <" << o.center.x <<   "> [" << rBounds.first << "~" << rBounds.second << "] m" << std::setprecision(0) << 
         " | x <" << std::setw(4) << o.center_cartesian.z << "> [" << xBounds.first << "~" << xBounds.second << "] px " <<
@@ -168,30 +169,45 @@ int main(int argc, char **argv)
         const rs2::video_frame depthFrameColorized = rs2::colorizer().colorize(depthFrame); 
         DepthScale = depthFrame.get_units();
 
-        const auto depthBounds = GetDepthBounds(depthFrame, MinMaxPairI(0, INT_MAX));
-        const auto depthBoundsFilt = GetDepthBounds(depthFrame, MinMaxPairI(DepthMin, DepthMax));
-        std::cout << Timestamp("%F_%H%M%S") << std::setprecision(3) << 
-            " R ["        << depthBounds.first << "~" << depthBounds.second << "] m" << 
-            " filtered [" << depthBoundsFilt.first << "~" << depthBoundsFilt.second << "] m" << 
-            std::endl;
-
         depth_camera->set_depth_frame(&depthFrame);
         const auto depthData = depth_camera->read();
+
+        //Detect obstacles
         std::vector<Obstacle> obstacles = detectorObstacle->detect(depthData); 
         FilterObstales(obstacles);
 
-        std::cout << "DepthImageObstacleDetector " << std::endl;
+        //Format log message
+        std::stringstream logSS;
+        const auto depthBounds = GetDepthBounds(depthFrame, MinMaxPairI(0, INT_MAX));
+        const auto depthBoundsFilt = GetDepthBounds(depthFrame, MinMaxPairI(DepthMin, DepthMax));
+        logSS << std::setprecision(3) << 
+            "R ["        << depthBounds.first << "~" << depthBounds.second << "] m" << 
+            " filtered [" << depthBoundsFilt.first << "~" << depthBoundsFilt.second << "] m" << 
+            std::endl;
+
+        logSS << "DepthImageObstacleDetector " << std::endl;
         for (const Obstacle& o: obstacles)
         {
-            LogObstacle(o);       
+            LogObstacle(o, logSS);       
         }
 
+        //Log to console
+        std::cout << Timestamp("%F_%H%M%S") << std::endl << logSS.rdbuf(); 
+
+        //Log to file
+        const std::string filenamePrefix  = "image_" + Timestamp("%F_%H%M%S"); 
+        std::fstream logFS("./" + filenamePrefix + ".log", std::ios::out);
+        logFS << logSS.str();
+        logFS.flush();
+        logFS.close();
+
+        //Draw obstacles onto depth image
         std::vector<uint8_t> depthFrameBuf = GetRawBuffer<uint8_t>(depthFrameColorized);
         DrawObstacles(depthFrameBuf, obstacles);
 
-        const std::string filenamePrefix  = "image_" + Timestamp("%F_%H%M%S") + "_"; 
-        SaveFrame(depthFrameColorized, depthFrameBuf.data(), filenamePrefix + "depth_obstacles.png");
-        SaveFrame(depthFrameColorized, nullptr,              filenamePrefix + "depth.png");
-        SaveFrame(colorFrame,          nullptr,              filenamePrefix + "color.png");
+        //Save images
+        SaveFrame(depthFrameColorized, depthFrameBuf.data(), filenamePrefix + "_depth_obst.png");
+        SaveFrame(depthFrameColorized, nullptr,              filenamePrefix + "_depth.png");
+        SaveFrame(colorFrame,          nullptr,              filenamePrefix + "_color.png");
     }
 }
