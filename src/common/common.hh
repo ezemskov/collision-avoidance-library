@@ -37,6 +37,8 @@ struct Obstacle {
      */
     glm::dvec3 center;
     glm::dvec3 center_cartesian;
+
+    std::vector<glm::dvec3> points;
 };
 
 struct Pose {

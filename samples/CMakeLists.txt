@@ -6,11 +6,11 @@ if (${WITH_GAZEBO})
 endif()
 
 if (${WITH_REALSENSE})
-    add_executable(detector_sample detector_sample.cc)
-    target_link_libraries(detector_sample coav realsense2)
+    #add_executable(detector_sample detector_sample.cc)
+    #target_link_libraries(detector_sample coav realsense2)
 
-    add_executable(polarhist_sample polarhist_sample.cc)
-    target_link_libraries(polarhist_sample coav realsense2)
+    #add_executable(polarhist_sample polarhist_sample.cc)
+    #target_link_libraries(polarhist_sample coav realsense2)
     
     add_executable(detector_comparison_sample detector_comparison_sample.cc)
     target_link_libraries(detector_comparison_sample coav realsense2)

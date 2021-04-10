@@ -18,22 +18,44 @@ namespace
     static const uint16_t DepthMin = 330;   //0.33 m
     static const uint16_t DepthMax = 15000; //15 m
 
+    static double DepthScale = 1.0;    //ugly
+
     using MinMaxPairI = std::pair<uint16_t, uint16_t>;
-    using MinMaxPairF = std::pair<float, float> ;
+    using MinMaxPairF = std::pair<float, float>;
+    using MinMaxPairD = std::pair<double, double>;
+}
+
+template<typename GetDimFuncT>
+MinMaxPairD Bounds(const Obstacle& o, GetDimFuncT getDim)
+{
+    if (o.points.empty())
+    {
+        return MinMaxPairD(getDim(o.center), getDim(o.center)); 
+    }
+
+    const auto [itMin, itMax] = std::minmax_element(o.points.begin(), o.points.end(), [&getDim](const glm::dvec3& pA, const glm::dvec3& pB) -> bool {
+        return getDim(pA) < getDim(pB);
+    });
+
+    return MinMaxPairD(getDim(*itMin), getDim(*itMax));
 }
 
 void LogObstacle(const Obstacle& o)
 {
+    const auto rBounds = Bounds(o, [](const glm::dvec3& point){ return point.x * DepthScale; });
+    const auto xBounds = Bounds(o, [](const glm::dvec3& point){ return point.z; });
+    const auto yBounds = Bounds(o, [](const glm::dvec3& point){ return point.y; });
+
+    const auto delta = [](const MinMaxPairD& bounds) { return bounds.second - bounds.first; };
+
     std::cout << std::fixed << 
-        "\tid " << std::setw(5) << 
-o.id << 
-        std::setprecision(3) << 
-        " [R " << o.center.x << " m" << std::setprecision(0) << 
-        " | h " << std::setw(3) << glm::degrees(o.center.z) << "° " << 
-        " | v " << std::setw(3) << glm::degrees(o.center.y) << "° " << 
-        " | x " << std::setw(4) << o.center_cartesian.z << " px " <<
-        " | y " << std::setw(3) << o.center_cartesian.y << " px " <<
-        "]" << std::endl;
+        "\tid " << std::setw(5) << o.id << std::setprecision(3) << 
+        " R <" << o.center.x <<   "> [" << rBounds.first << "~" << rBounds.second << "] m" << std::setprecision(0) << 
+        " | x <" << std::setw(4) << o.center_cartesian.z << "> [" << xBounds.first << "~" << xBounds.second << "] px " <<
+        " | y <" << std::setw(3) << o.center_cartesian.y << "> [" << std::setw(3) << yBounds.first << "~" << std::setw(3) << yBounds.second << "] px " <<
+        " | w " << std::setw(3) << delta(xBounds) << " h " << std::setw(3) << delta(yBounds) << 
+        " | qnty " << std::setw(3) << o.points.size() <<
+        std::endl;
 }
 
 template<typename T>
@@ -48,14 +70,14 @@ std::vector<T> GetRawBuffer(const rs2::video_frame& df)
    return res;
 }
 
-std::pair<uint16_t, uint16_t> GetRawDepthBounds(const std::vector<uint16_t>& rawDepthVec_)
+MinMaxPairI GetRawDepthBounds(const std::vector<uint16_t>& rawDepthVec_)
 {
     std::vector<uint16_t> rawDepthVec = rawDepthVec_;
     auto itEndNonzero = std::remove(rawDepthVec.begin(), rawDepthVec.end(), 0);
     rawDepthVec.erase(itEndNonzero, rawDepthVec.end());
 
     const auto [minDepth, maxDepth] = std::minmax_element(rawDepthVec.begin(), rawDepthVec.end());
-    return std::pair<uint16_t, uint16_t>(*minDepth, *maxDepth);
+    return MinMaxPairI(*minDepth, *maxDepth);
 }
 
 MinMaxPairI GetRawDepthBounds(const std::vector<uint16_t>& rawDepthVec, const MinMaxPairI& filter)
@@ -77,6 +99,16 @@ MinMaxPairF GetDepthBounds(const rs2::depth_frame& frame, const MinMaxPairI& fil
         rawBounds.first  * frame.get_units(),
         rawBounds.second * frame.get_units()
     );
+}
+
+//Remove obstacles that contain points further/deeper than DepthMax
+void FilterObstales(std::vector<Obstacle>& obstacles)
+{
+    auto itEndFiltered = std::remove_if(obstacles.begin(), obstacles.end(), [](const Obstacle& o){
+        const auto rBounds = Bounds(o, [](const glm::dvec3& point){ return point.x; });
+        return (rBounds.second > DepthMax);
+    });
+    obstacles.erase(itEndFiltered, obstacles.end());
 }
 
 std::string Timestamp(const std::string& format)
@@ -104,7 +136,7 @@ void DrawObstacles(std::vector<uint8_t>& imageBuf, const std::vector<Obstacle>& 
 {
     //todo : get from rs2::video_frame
     static const size_t Width = 848;
-    static const size_t Height = 480;
+    //static const size_t Height = 480;
     static const size_t BPP = 3;
 
     for (const Obstacle& o: obstacles)
@@ -131,6 +163,7 @@ int main(int argc, char **argv)
         rs2::depth_frame depthFrame = frames.get_depth_frame();
         rs2::video_frame colorFrame = frames.get_color_frame();
         const rs2::video_frame depthFrameColorized = rs2::colorizer().colorize(depthFrame); 
+        DepthScale = depthFrame.get_units();
 
         const auto depthBounds = GetDepthBounds(depthFrame, MinMaxPairI(0, INT_MAX));
         const auto depthBoundsFilt = GetDepthBounds(depthFrame, MinMaxPairI(DepthMin, DepthMax));
@@ -141,7 +174,8 @@ int main(int argc, char **argv)
 
         depth_camera->set_depth_frame(&depthFrame);
         const auto depthData = depth_camera->read();
-        const std::vector<Obstacle> obstacles = detectorObstacle->detect(depthData); 
+        std::vector<Obstacle> obstacles = detectorObstacle->detect(depthData); 
+        FilterObstales(obstacles);
 
         std::cout << "DepthImageObstacleDetector " << std::endl;
         for (const Obstacle& o: obstacles)

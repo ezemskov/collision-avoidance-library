@@ -289,8 +289,10 @@ int DepthImageObstacleDetector::extract_blobs()
 
             Obstacle *o = &obstacles[blob_to_obstacle[label]];
             o->center += glm::dvec3(0, i, j);
-            o->center.x = (depth_frame[row_offset + j] < o->center.x) ?
-                depth_frame[row_offset + j] : o->center.x;
+            const uint16_t currDepth = depth_frame[row_offset + j];
+            o->center.x = (currDepth < o->center.x) ? currDepth : o->center.x;
+
+            o->points.push_back({currDepth, i, j});
         }
     }
 
