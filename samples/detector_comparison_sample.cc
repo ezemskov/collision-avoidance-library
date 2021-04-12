@@ -16,6 +16,14 @@
 
 namespace 
 {
+    namespace ObstacleLimits
+    {
+        static const size_t WidthPx = 300;
+        static const size_t HeightPx = 300;
+        static const uint16_t DepthUnits = 500;
+        static const size_t PointsQnty = 200000;
+    };
+ 
     static const uint16_t DepthMin = 330;   //0.33 m
     static const uint16_t DepthMax = 15000; //15 m
 
@@ -41,20 +49,23 @@ MinMaxPairD Bounds(const Obstacle& o, GetDimFuncT getDim)
     return MinMaxPairD(getDim(*itMin), getDim(*itMax));
 }
 
+double Delta(const MinMaxPairD& bounds)
+{
+    return bounds.second - bounds.first;
+} 
+
 void LogObstacle(const Obstacle& o, std::ostream& os)
 {
-    const auto rBounds = Bounds(o, [](const glm::dvec3& point){ return point.x * DepthScale; });
     const auto xBounds = Bounds(o, [](const glm::dvec3& point){ return point.z; });
     const auto yBounds = Bounds(o, [](const glm::dvec3& point){ return point.y; });
-
-    const auto delta = [](const MinMaxPairD& bounds) { return bounds.second - bounds.first; };
+    const auto rBounds = Bounds(o, [](const glm::dvec3& point){ return point.x * DepthScale; });
 
     os << std::fixed << 
         "\tid " << std::setw(5) << o.id << std::setprecision(3) << 
         " R <" << o.center.x <<   "> [" << rBounds.first << "~" << rBounds.second << "] m" << std::setprecision(0) << 
         " | x <" << std::setw(4) << o.center_cartesian.z << "> [" << xBounds.first << "~" << xBounds.second << "] px " <<
         " | y <" << std::setw(3) << o.center_cartesian.y << "> [" << std::setw(3) << yBounds.first << "~" << std::setw(3) << yBounds.second << "] px " <<
-        " | w " << std::setw(3) << delta(xBounds) << " h " << std::setw(3) << delta(yBounds) << 
+        " | w " << std::setw(3) << Delta(xBounds) << " h " << std::setw(3) << Delta(yBounds) << 
         " | qnty " << std::setw(3) << o.points.size() <<
         std::endl;
 }
@@ -106,9 +117,31 @@ MinMaxPairF GetDepthBounds(const rs2::depth_frame& frame, const MinMaxPairI& fil
 void FilterObstales(std::vector<Obstacle>& obstacles)
 {
     auto itEndFiltered = std::remove_if(obstacles.begin(), obstacles.end(), [](const Obstacle& o){
+        //any point is deeper than DepthMax
         const auto rBounds = Bounds(o, [](const glm::dvec3& point){ return point.x; });
         return (rBounds.second > DepthMax);
     });
+
+    itEndFiltered = std::remove_if(obstacles.begin(), itEndFiltered, [](const Obstacle& o){
+        //too many points
+        return (o.points.size() > ObstacleLimits::PointsQnty);
+    });
+
+    itEndFiltered = std::remove_if(obstacles.begin(), itEndFiltered, [](const Obstacle& o){
+        const auto xBounds = Bounds(o, [](const glm::dvec3& point){ return point.z; });
+        const auto yBounds = Bounds(o, [](const glm::dvec3& point){ return point.y; });
+
+        //too big
+        return (Delta(xBounds) > ObstacleLimits::WidthPx) || 
+               (Delta(yBounds) > ObstacleLimits::HeightPx);
+    });
+
+    itEndFiltered = std::remove_if(obstacles.begin(), itEndFiltered, [](const Obstacle& o){
+        //too deep
+        const auto rBounds = Bounds(o, [](const glm::dvec3& point){ return point.x; });
+        return Delta(rBounds) > ObstacleLimits::DepthUnits;
+    });
+
     obstacles.erase(itEndFiltered, obstacles.end());
 }
 
@@ -174,7 +207,8 @@ int main(int argc, char **argv)
 
         //Detect obstacles
         std::vector<Obstacle> obstacles = detectorObstacle->detect(depthData); 
-        FilterObstales(obstacles);
+        auto filteredObstacles = obstacles;
+        FilterObstales(filteredObstacles);
 
         //Format log message
         std::stringstream logSS;
@@ -185,8 +219,14 @@ int main(int argc, char **argv)
             " filtered [" << depthBoundsFilt.first << "~" << depthBoundsFilt.second << "] m" << 
             std::endl;
 
-        logSS << "DepthImageObstacleDetector " << std::endl;
+        logSS << "All obstacles " << std::endl;
         for (const Obstacle& o: obstacles)
+        {
+            LogObstacle(o, logSS);       
+        }
+
+        logSS << "Filtered obstacles " << std::endl;
+        for (const Obstacle& o: filteredObstacles)
         {
             LogObstacle(o, logSS);       
         }
@@ -203,7 +243,7 @@ int main(int argc, char **argv)
 
         //Draw obstacles onto depth image
         std::vector<uint8_t> depthFrameBuf = GetRawBuffer<uint8_t>(depthFrameColorized);
-        DrawObstacles(depthFrameBuf, obstacles);
+        DrawObstacles(depthFrameBuf, filteredObstacles);
 
         //Save images
         SaveFrame(depthFrameColorized, depthFrameBuf.data(), filenamePrefix + "_depth_obst.png");
